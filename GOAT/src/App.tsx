@@ -3,7 +3,6 @@ import { ConsumerAccount } from './components/ConsumerAccount';
 import { RestaurantAccount } from './components/RestaurantAccount';
 import { Login } from './components/Login';
 import { Signup } from './components/Signup';
-import { DevTools } from './components/DevTools';
 import { LogOut } from 'lucide-react';
 import svgPaths from './imports/svg-8v4mfggej5';
 import { AppProvider, useApp } from './context/AppContext';
@@ -109,9 +108,6 @@ function AppContent() {
         {accountType === 'customer' && <ConsumerAccount />}
         {accountType === 'restaurant' && <RestaurantAccount />}
       </main>
-
-      {/* 개발자 도구 */}
-      <DevTools />
     </div>
   );
 }

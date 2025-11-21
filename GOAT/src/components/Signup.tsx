@@ -66,20 +66,6 @@ export function Signup({
     });
   };
 
-  // 개발용: 로컬스토리지 초기화
-  const handleClearData = () => {
-    if (
-      confirm(
-        "모든 로컬 데이터를 삭제하시겠습니까? (사용자, 매장, 예약 데이터 모두 삭제됩니다)",
-      )
-    ) {
-      localStorage.clear();
-      alert(
-        "데이터가 초기화되었습니다. 페이지를 새로고침합니다.",
-      );
-      window.location.reload();
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,7 +85,7 @@ export function Signup({
           return;
         }
 
-        // 소비자 회원가입
+        // 소비자 회원가입 (명세서: /auth/signup, role: 'customer')
         const newUser = await authService.signup({
           userId: formData.userId,
           email: formData.email,
@@ -109,9 +95,7 @@ export function Signup({
           role: "customer",
         });
 
-        // ✅ Context에 사용자 정보 설정 (자동 로그인)
         setCurrentUser(newUser);
-
         alert("회원가입이 완료되었습니다!");
         onSignupComplete();
       } else if (selectedType === "restaurant") {
@@ -128,29 +112,22 @@ export function Signup({
           return;
         }
 
-        // 매장 회원가입
-        const newUser = await authService.signupRestaurantOwner(
-          {
-            userId: formData.userId,
-            email: formData.email,
-            password: formData.password,
-            name: formData.managerName,
-            phone: formData.phone,
-            restaurantName: formData.restaurantName,
-            capacity: formData.seats
-              ? parseInt(formData.seats)
-              : undefined,
-            address: formData.address || undefined,
-            imageUrl: formData.imageUrl || undefined,
-          },
-        );
+        // 매장 회원가입 (명세서: /auth/signup, role: 'restaurant_owner')
+        const newUser = await authService.signup({
+          userId: formData.userId,
+          email: formData.email,
+          password: formData.password,
+          name: formData.managerName,
+          phone: formData.phone,
+          restaurantName: formData.restaurantName,
+          capacity: formData.seats ? parseInt(formData.seats) : undefined,
+          address: formData.address || undefined,
+          imageUrl: formData.imageUrl || undefined,
+          role: "restaurant_owner",
+        });
 
-        // ✅ Context에 사용자 정보 설정 (자동 로그인)
         setCurrentUser(newUser);
-
-        // ✅ 레스토랑 목록 새로고침 (authService가 이미 LocalStorage에 저장했으므로)
         await refreshRestaurants();
-
         alert("매장 회원가입이 완료되었습니다!");
         onSignupComplete();
       }
@@ -278,17 +255,6 @@ export function Signup({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* 개발용: 데이터 초기화 버튼 */}
-              <button
-                onClick={handleClearData}
-                className="bg-red-50 h-[41.6px] relative rounded-[2.68435e+07px] shrink-0 px-4 border border-red-200 hover:bg-red-100 transition-colors"
-                title="로컬 데이터 초기화"
-              >
-                <p className="font-['Arimo:Regular','Noto_Sans_KR:Regular',sans-serif] font-normal leading-[20px] text-red-600 text-[14px] text-nowrap whitespace-pre">
-                  데이터 초기화
-                </p>
-              </button>
-
               <button
                 onClick={onLoginClick}
                 className="bg-white h-[41.6px] relative rounded-[2.68435e+07px] shrink-0 w-[107.6px]"

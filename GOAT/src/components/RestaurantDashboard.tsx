@@ -24,67 +24,44 @@ import {
   TableRow,
 } from "./ui/table";
 import {
-  Calendar,
-  Clock,
+  CalendarCheck,
   Users,
   CheckCircle,
   XCircle,
-  BarChart3,
-  TrendingUp,
-  TrendingDown,
-  Activity,
-  CalendarCheck,
   Settings,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import { Switch } from "./ui/switch";
 import { useApp } from "../context/AppContext";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { formatKoreanDate } from "../services";
 
 export function RestaurantDashboard() {
   // Context에서 데이터 가져오기
   const {
     bookings,
-    updateBooking,
     deleteBooking,
-    rejectBooking, // ✅ 추가
+    rejectBooking,
     currentUser,
     getRestaurant,
-    getRestaurantSettings,
-    updateRestaurantSettings,
-    setDailyCapacity,
-    getAvailableCapacity,
+    confirmBooking, // 예약 확정 함수 추가
   } = useApp();
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split("T")[0];
   });
-  const [selectedCapacity, setSelectedCapacity] = useState<number>(0);
-  const [isDateAvailable, setIsDateAvailable] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
 
   // 현재 매장 정보 가져오기
   const restaurant = currentUser?.restaurantId
     ? getRestaurant(currentUser.restaurantId)
     : null;
 
-  // 🆕 매장의 최대 수용 인원 (날짜별 설정 반영)
-  const [maxCapacity, setMaxCapacity] = useState<number>(restaurant?.capacity || 50);
+  // 매장의 최대 수용 인원
+  const maxCapacity = restaurant?.capacity || 50;
 
-  // 🆕 매장의 기본 최대 수용 인원 (변하지 않음)
-  const baseCapacity = restaurant?.capacity || 50;
-
-  // 동적 수용 인원 탭 생성 (5명 단위) - 기본 매장 수용 인원 기준
+  // 동적 수용 인원 탭 생성 (5명 단위)
   const capacityOptions = Array.from(
-    { length: Math.ceil(baseCapacity / 5) },
+    { length: Math.ceil(maxCapacity / 5) },
     (_, i) => (i + 1) * 5
   );
 
@@ -99,21 +76,6 @@ export function RestaurantDashboard() {
       ? bookings.past.filter((b) => b.restaurantId === currentUser.restaurantId)
       : [],
   };
-
-  // 🔍 디버깅 정보 출력
-  useEffect(() => {
-    if (currentUser?.restaurantId) {
-      console.log('=== 매장 대시보드 디버깅 ===');
-      console.log('내 매장 ID:', currentUser.restaurantId);
-      console.log('내 매장 정보:', restaurant);
-      console.log('전체 예약 (upcoming):', bookings.upcoming.length, '개');
-      console.log('내 매장 예약 (upcoming):', myRestaurantBookings.upcoming.length, '개');
-      console.log('전체 예약 상세:');
-      bookings.upcoming.forEach(b => {
-        console.log(`  - [${b.restaurantId === currentUser.restaurantId ? '✅ 내 매장' : '❌ 다른 매장'}] ${b.restaurantName}(ID: ${b.restaurantId}) - ${b.date} ${b.time} - ${b.guestName}`);
-      });
-    }
-  }, [currentUser, bookings, restaurant, myRestaurantBookings]);
 
   // 선택된 날짜의 예약 총 인원 계산 (취소되지 않은 예약만)
   const todayBookings = myRestaurantBookings.upcoming.filter(
@@ -161,82 +123,6 @@ export function RestaurantDashboard() {
     );
   };
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      if (restaurant && currentUser?.restaurantId) {
-        try {
-          const settings = await getRestaurantSettings(currentUser.restaurantId);
-          // 선택된 날짜의 예약 가능 상태 확인
-          const isAvailable = !settings.unavailableDates.includes(selectedDate);
-          setIsDateAvailable(isAvailable);
-          
-          // 🆕 선택된 날짜의 수용 인원 설정 (없으면 기본 매장 수용 인원 사용)
-          const dailyCap = settings.dailyCapacity[selectedDate];
-          const baseCapacity = restaurant.capacity || 50;
-          
-          if (dailyCap !== undefined) {
-            setSelectedCapacity(dailyCap);
-            setMaxCapacity(dailyCap); // 🆕 날짜별 설정 반영
-            console.log(`📅 ${selectedDate} 수용 인원: ${dailyCap}명 (매장 대시보드 설정)`);
-          } else {
-            setSelectedCapacity(baseCapacity);
-            setMaxCapacity(baseCapacity); // 🆕 기본값 사용
-            console.log(`📅 ${selectedDate} 수용 인원: ${baseCapacity}명 (기본값)`);
-          }
-        } catch (error) {
-          console.error("설정 로드 실패:", error);
-        }
-      }
-    };
-
-    loadSettings();
-  }, [restaurant, currentUser, selectedDate, getRestaurantSettings]);
-
-  const handleSaveSettings = async () => {
-    if (!currentUser?.restaurantId) return;
-    
-    setIsSaving(true);
-    try {
-      // 먼저 현재 설정을 가져옴
-      const settings = await getRestaurantSettings(currentUser.restaurantId);
-      
-      // 날짜 예약 가능 상태 업데이트
-      let unavailableDates = [...settings.unavailableDates];
-      const dateIndex = unavailableDates.indexOf(selectedDate);
-      
-      if (isDateAvailable) {
-        // 예약 가능하게 만들기 (목록에서 제거)
-        if (dateIndex !== -1) {
-          unavailableDates = unavailableDates.filter(d => d !== selectedDate);
-        }
-      } else {
-        // 예약 불가능하게 만들기 (목록에 추가)
-        if (dateIndex === -1) {
-          unavailableDates.push(selectedDate);
-        }
-      }
-      
-      // 날짜별 수용 인원 업데이트
-      const dailyCapacity = {
-        ...settings.dailyCapacity,
-        [selectedDate]: selectedCapacity,
-      };
-      
-      // 설정 저장
-      await updateRestaurantSettings(currentUser.restaurantId, {
-        unavailableDates,
-        dailyCapacity,
-      });
-      
-      toast.success("변경되었습니다");
-    } catch (error) {
-      console.error("설정 저장 실패:", error);
-      toast.error("설정 저장 중 오류가 발생했습니다.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
     <div className="space-y-8">
       {/* 메인 탭 */}
@@ -258,7 +144,7 @@ export function RestaurantDashboard() {
             >
               <Settings className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">
-                예약 설정
+                예약 현황
               </span>
             </TabsTrigger>
           </TabsList>
@@ -310,20 +196,6 @@ export function RestaurantDashboard() {
                                 </>
                               )}
                             </p>
-                            {currentUser?.restaurantId && (
-                              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 max-w-md">
-                                <p className="text-sm text-green-900 font-medium mb-1">
-                                  💡 테스트 방법
-                                </p>
-                                <p className="text-sm text-green-700">
-                                  소비자 계정으로 로그인 → <strong>"{restaurant?.name}"</strong> 매장 찾기 → 예약하기
-                                  <br />
-                                  <span className="text-xs text-green-600 mt-1 block">
-                                    (매장 ID: {currentUser.restaurantId})
-                                  </span>
-                                </p>
-                              </div>
-                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -378,16 +250,9 @@ export function RestaurantDashboard() {
                                   className="text-[#10b981] hover:bg-green-50 border-green-300"
                                   onClick={async () => {
                                     try {
-                                      await updateBooking(booking.id, { status: "confirmed" });
-                                      
-                                      // 🆕 남은 수용 인원 확인 및 표시
-                                      const remainingCapacity = await getAvailableCapacity(
-                                        booking.restaurantId,
-                                        booking.date
-                                      );
-                                      
+                                      await confirmBooking(booking.id);
                                       toast.success(
-                                        `${booking.guestName}님의 예약이 승인되었습니다.\n남은 수용 인원: ${remainingCapacity}명`
+                                        `${booking.guestName}님의 예약이 승인되었습니다.`
                                       );
                                     } catch (error) {
                                       console.error("예약 확정 실패:", error);
@@ -403,7 +268,7 @@ export function RestaurantDashboard() {
                                   className="text-red-600 hover:bg-red-50 border-red-300"
                                   onClick={async () => {
                                     try {
-                                      await rejectBooking(booking.id); // ✅ rejectBooking 메서드 사용
+                                      await rejectBooking(booking.id);
                                       toast.success(`${booking.guestName}님의 예약이 거절되었습니다.`);
                                     } catch (error) {
                                       console.error("예약 거절 실패:", error);
@@ -426,7 +291,7 @@ export function RestaurantDashboard() {
           </Card>
         </TabsContent>
 
-        {/* 설정 탭 */}
+        {/* 예약 현황 탭 */}
         <TabsContent value="availability" className="space-y-6">
           <div className="max-w-2xl mx-auto">
             <Card className="shadow-lg border-[#d4e1ff]">
@@ -436,7 +301,7 @@ export function RestaurantDashboard() {
                   테이블 수용 인원
                 </CardTitle>
                 <CardDescription>
-                  좌석 및 수용 인원을 설정하세요
+                  좌석 및 수용 인원 현황
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
@@ -450,25 +315,10 @@ export function RestaurantDashboard() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-4 bg-gradient-to-r from-[#f0f4ff] to-white rounded-lg border border-[#d4e1ff]">
-                    <div className="space-y-0.5">
-                      <Label>예약 가능 상태</Label>
-                      <p className="text-sm text-gray-500">
-                        {formatKoreanDate(selectedDate)} 예약 받기
-                      </p>
-                    </div>
-                    <Switch
-                      checked={isDateAvailable}
-                      onCheckedChange={setIsDateAvailable}
-                    />
-                  </div>
-                </div>
-
                 {/* 수용 인원 정보 표시 */}
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">선택한 날짜 수용인원</span>
+                    <span className="text-sm text-gray-600">매장 최대 수용인원</span>
                     <span className="font-semibold text-[#4a6cf7]">{maxCapacity}명</span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -480,43 +330,6 @@ export function RestaurantDashboard() {
                     <span className="font-semibold text-green-600">{availableCapacity}명</span>
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>수용 인원 설정</Label>
-                  <p className="text-sm text-gray-500 mb-2">
-                    예약 가능한 최대 인원을 설정하세요
-                  </p>
-                  <div className="grid grid-cols-5 gap-2 p-1">
-                    {capacityOptions.map((capacity) => (
-                      <Button
-                        key={capacity}
-                        variant={
-                          selectedCapacity === capacity
-                            ? "default"
-                            : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setSelectedCapacity(capacity)}
-                        className={
-                          selectedCapacity === capacity
-                            ? "bg-gradient-to-b from-[#5570f1] to-[#4a6cf7]"
-                            : "border-[#d4e1ff] text-[#4a6cf7] hover:bg-[#f0f4ff]"
-                        }
-                      >
-                        {capacity}명
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  className="w-full bg-gradient-to-b from-[#5570f1] to-[#4a6cf7] hover:from-[#4a6cf7] hover:to-[#3451d9]"
-                  size="lg"
-                  onClick={handleSaveSettings}
-                  disabled={isSaving}
-                >
-                  {isSaving ? "저장 중..." : "저장"}
-                </Button>
               </CardContent>
             </Card>
           </div>

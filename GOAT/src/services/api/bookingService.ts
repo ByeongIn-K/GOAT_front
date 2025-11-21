@@ -175,97 +175,51 @@ const mockBookingService = {
 // ============================================
 
 const realBookingService = {
+  // 학생: 예약 정보 확인
   async getAll(): Promise<Booking[]> {
-    return apiClient<Booking[]>('/bookings');
+    return apiClient<Booking[]>('/student/reservations', {
+      method: 'GET',
+    });
   },
 
-  async getById(id: string): Promise<Booking | null> {
-    try {
-      return await apiClient<Booking>(`/bookings/${id}`);
-    } catch (error) {
-      return null;
-    }
-  },
-
+  // 사장님: 매장 전체 예약 정보 조회
   async getByRestaurant(restaurantId: number): Promise<Booking[]> {
-    return apiClient<Booking[]>(`/bookings?restaurantId=${restaurantId}`);
+    return apiClient<Booking[]>(`/store/reservations?store_id=${restaurantId}`, {
+      method: 'GET',
+    });
   },
 
-  async getByUser(userId: string): Promise<Booking[]> {
-    return apiClient<Booking[]>(`/bookings?userId=${userId}`);
-  },
-
-  async getByConfirmationNumber(confirmationNumber: string): Promise<Booking | null> {
-    try {
-      return await apiClient<Booking>(
-        `/bookings?confirmationNumber=${confirmationNumber}`
-      );
-    } catch (error) {
-      return null;
-    }
-  },
-
+  // 학생: 예약 신청
   async create(
     data: Omit<Booking, 'id' | 'createdAt' | 'confirmationNumber'>
   ): Promise<Booking> {
-    return apiClient<Booking>('/bookings', {
+    return apiClient<Booking>('/student/reservations', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
-  async update(id: string, updates: Partial<Booking>): Promise<Booking> {
-    return apiClient<Booking>(`/bookings/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates),
-    });
-  },
-
+  // 학생: 예약 취소
   async delete(id: string): Promise<void> {
-    await apiClient<void>(`/bookings/${id}`, {
+    await apiClient<void>(`/student/reservations/${id}`, {
       method: 'DELETE',
     });
   },
 
-  async cancel(id: string): Promise<Booking> {
-    return apiClient<Booking>(`/bookings/${id}/cancel`, {
-      method: 'POST',
-    });
-  },
-
+  // 사장님: 예약 수락
   async confirm(id: string): Promise<Booking> {
-    return apiClient<Booking>(`/bookings/${id}/confirm`, {
-      method: 'POST',
+    return apiClient<Booking>(`/store/reservations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'confirmed' }),
     });
   },
 
-  /**
-   * ✅ 예약 거절
-   */
+  // 사장님: 예약 거절
   async reject(id: string): Promise<Booking> {
-    return apiClient<Booking>(`/bookings/${id}/reject`, {
-      method: 'POST',
+    return apiClient<Booking>(`/store/reservations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'rejected' }),
     });
-  },
-
-  async getByDateRange(
-    restaurantId: number,
-    startDate: string,
-    endDate: string
-  ): Promise<Booking[]> {
-    return apiClient<Booking[]>(
-      `/bookings?restaurantId=${restaurantId}&startDate=${startDate}&endDate=${endDate}`
-    );
-  },
-
-  async getConfirmedPartySizeByDate(
-    restaurantId: number,
-    date: string
-  ): Promise<number> {
-    const response = await apiClient<{ totalPartySize: number }>(
-      `/bookings/confirmed-party-size?restaurantId=${restaurantId}&date=${date}`
-    );
-    return response.totalPartySize;
   },
 };
 

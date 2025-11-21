@@ -24,7 +24,6 @@ import {
   findNextAvailableTime,
   generateDefaultTimeSlots,
   formatKoreanDate,
-  settingsService,
   getTodayLocalDate,
   formatLocalDate,
   getTomorrowLocalDate,
@@ -53,7 +52,6 @@ export function RestaurantProfile({
     restaurants,
     addBooking,
     currentUser,
-    getAvailableCapacity,
     bookings,
   } = useApp();
 
@@ -81,7 +79,7 @@ export function RestaurantProfile({
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
 
-  // 🆕 로그인한 사용자 정보로 자동 채우기
+  // 로그인한 사용자 정보로 자동 채우기
   useEffect(() => {
     if (currentUser) {
       setGuestName(currentUser.name || "");
@@ -92,140 +90,56 @@ export function RestaurantProfile({
   // 예약 모드
   const bookingMode = bookingInfo?.mode || "scheduled";
 
-  // 🆕 실시간 예약 모드일 때 자동으로 시간 설정
-  useEffect(() => {
-    const setInstantBookingTime = async () => {
-      if (bookingMode === "instant") {
-        console.log("=== 실시간 예약 시간 자동 설정 ===");
-        console.log("매장 ID:", restaurant.id);
-
-        try {
-          // 매장 설정 가져오기
-          const settings =
-            await settingsService.getByRestaurantId(
-              restaurant.id,
-            );
-          console.log("매장 설정:", settings);
-
-          const today = getTodayLocalDate();
-          const availableSlots =
-            settings.availableTimeSlots?.[today] ||
-            generateDefaultTimeSlots();
-          console.log("오늘 날짜:", today);
-          console.log("오늘 예약 가능 시간:", availableSlots);
-
-          // 현재 시간 가져오기
-          const currentTime = getCurrentTime();
-          console.log("현재 시간:", currentTime);
-
-          // 가장 가까운 미래 시간 찾기
-          const nextTime = findNextAvailableTime(
-            currentTime,
-            availableSlots,
-          );
-          console.log("선택된 시간:", nextTime);
-
-          if (nextTime) {
-            setSelectedTime(nextTime);
-            console.log(
-              "✅ 실시간 예약 시간 설정 완료:",
-              nextTime,
-            );
-          } else {
-            console.log("❌ 오늘 예약 가능한 시간이 없습니다.");
-            // ✅ 내일 첫 시간으로 설정
-            const tomorrowStr = getTomorrowLocalDate();
-            const tomorrowSlots =
-              settings.availableTimeSlots?.[tomorrowStr] ||
-              generateDefaultTimeSlots();
-            if (tomorrowSlots.length > 0) {
-              setSelectedDate(tomorrowStr);
-              setSelectedTime(tomorrowSlots[0]);
-              console.log("내일 날짜로 설정:", tomorrowStr);
-              console.log(
-                "내일 첫 시간으로 설정:",
-                tomorrowSlots[0],
-              );
-            }
-          }
-        } catch (error) {
-          console.error("실시간 예약 시간 설정 실패:", error);
-          // 에러 시 기본값 설정
-          const defaultSlots = generateDefaultTimeSlots();
-          const currentTime = getCurrentTime();
-          const nextTime = findNextAvailableTime(
-            currentTime,
-            defaultSlots,
-          );
-          if (nextTime) {
-            setSelectedTime(nextTime);
-          }
-        }
-      }
-    };
-
-    setInstantBookingTime();
-  }, [bookingMode, restaurant.id]);
-
-  // 🆕 동적으로 시간 슬롯 가져오기 (settingsService 사용)
+  // 시간 슬롯 및 남은 수용 인원 계산 (명세서 기반: 프론트에서 bookings로 계산)
   const [timeSlots, setTimeSlots] = useState<
     Array<{ time: string; available: boolean }>
-  >([]);
+  >(generateDefaultTimeSlots().map((time) => ({
+    time,
+    available: true,
+  })));
 
-  // 🆕 날짜별 남은 수용 인원 상태 (실시간 계산)
   const [availableCapacity, setAvailableCapacity] =
     useState<number>(restaurant.capacity);
 
   useEffect(() => {
-    const loadTimeSlots = async () => {
-      try {
-        const settings =
-          await settingsService.getByRestaurantId(
-            restaurant.id,
-          );
-        const slots =
-          settings.availableTimeSlots?.[selectedDate] ||
-          generateDefaultTimeSlots();
+    // 예약된 인원 계산
+    const reserved = bookings.upcoming
+      .filter(
+        (b) =>
+          b.restaurantId === restaurant.id &&
+          b.date === selectedDate &&
+          b.status === "confirmed"
+      )
+      .reduce((sum, b) => sum + b.partySize, 0);
 
-        setTimeSlots(
-          slots.map((time) => ({
-            time: time,
-            available: true,
-          })),
-        );
+    setAvailableCapacity(restaurant.capacity - reserved);
 
-        // 🆕 남은 수용 인원 로드 (실시간 계산)
-        const capacity = await getAvailableCapacity(
-          restaurant.id,
-          selectedDate,
-        );
-        setAvailableCapacity(capacity);
-        console.log(
-          `📅 ${selectedDate} 남은 수용 인원:`,
-          capacity,
-        );
-      } catch (error) {
-        console.error("시간 슬롯 로드 실패:", error);
-        // 에러 시 기본 시간 슬롯 사용
-        const defaultSlots = generateDefaultTimeSlots();
-        setTimeSlots(
-          defaultSlots.map((time) => ({
-            time: time,
-            available: true,
-          })),
-        );
-        setAvailableCapacity(restaurant.capacity);
+    // 시간 슬롯은 기본값 사용 (명세서에 시간별 예약 가능 정보 없음)
+    setTimeSlots(
+      generateDefaultTimeSlots().map((time) => ({
+        time,
+        available: true,
+      }))
+    );
+  }, [restaurant.id, selectedDate, restaurant.capacity, bookings]);
+
+  // 실시간 예약 모드일 때 자동으로 시간 설정
+  useEffect(() => {
+    if (bookingMode === "instant") {
+      const currentTime = getCurrentTime();
+      const nextTime = findNextAvailableTime(
+        currentTime,
+        generateDefaultTimeSlots()
+      );
+      if (nextTime) {
+        setSelectedTime(nextTime);
+      } else {
+        const tomorrowStr = getTomorrowLocalDate();
+        setSelectedDate(tomorrowStr);
+        setSelectedTime(generateDefaultTimeSlots()[0]);
       }
-    };
-
-    loadTimeSlots();
-  }, [
-    restaurant.id,
-    selectedDate,
-    restaurant.capacity,
-    getAvailableCapacity,
-    bookings,
-  ]); // bookings 추가로 실시간 업데이트!
+    }
+  }, [bookingMode, restaurant.id]);
 
   const handleBooking = async () => {
     if (
@@ -237,13 +151,11 @@ export function RestaurantProfile({
       return;
     }
 
-    // 🆕 수용 인원 체크
     if (availableCapacity === 0) {
       alert("죄송합니다. 현재 예약이 마감되었습니다.");
       return;
     }
 
-    // 🆕 인원 수 체크
     const requestedSize = parseInt(partySize);
     if (requestedSize > availableCapacity) {
       alert(
@@ -253,53 +165,29 @@ export function RestaurantProfile({
     }
 
     try {
-      console.log("=== 예약 생성 디버깅 ===");
-      console.log(
-        "예약할 매장:",
-        restaurant.name,
-        "(ID:",
-        restaurant.id,
-        ")",
-      );
-      console.log("현재 로그인 사용자:", currentUser);
-      console.log("예약 정보:");
-      console.log("  - 이름:", guestName);
-      console.log("  - 전화번호:", guestPhone);
-      console.log("  - 날짜:", selectedDate);
-      console.log("  - 시간:", selectedTime);
-      console.log("  - 인원:", partySize);
-      console.log("  - 모드:", bookingMode);
-
-      // 🔴 로그인 체크
       if (!currentUser) {
         alert("로그인이 필요합니다.");
         return;
       }
 
       const bookingData = {
-        userId: currentUser.id, // 🆕 로그인한 사용자 ID
+        userId: currentUser.id,
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         guestName,
         guestPhone,
         date: selectedDate,
         time: selectedTime,
-        partySize: parseInt(partySize),
-        status: "pending" as const, // ✅ pending으로 변경 (매장 승인 대기)
+        partySize: requestedSize,
+        status: "pending" as const,
         mode: bookingMode,
       };
 
-      console.log("전송할 예약 데이터:", bookingData);
-
       await addBooking(bookingData);
 
-      console.log("✅ 예약 생성 완료!");
       setShowConfirmation(true);
     } catch (error) {
-      console.error("예약 실패:", error);
-      alert(
-        "예약 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
-      );
+      alert("예약 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
     }
   };
 

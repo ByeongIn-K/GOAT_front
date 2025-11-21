@@ -70,7 +70,11 @@ const mockAuthService = {
     password: string;
     name: string;
     phone?: string;
-    role?: 'customer' | 'restaurant_owner';
+    restaurantName?: string; // 추가
+    capacity?: number;       // 추가
+    address?: string;        // 추가
+    imageUrl?: string;       // 추가
+    role?: 'customer' | 'restaurant_owner'; // 'admin' 제거
   }): Promise<User> {
     const users = this._getAllUsers();
 
@@ -333,29 +337,36 @@ const mockAuthService = {
 const realAuthService = {
   async getCurrentUser(): Promise<User | null> {
     try {
-      return await apiClient<User>('/auth/me');
+      // 명세서에 /auth/me 없음 → 필요시 백엔드에 문의
+      return null;
     } catch (error) {
       return null;
     }
   },
 
-  async login(email: string, password: string): Promise<User> {
+  // 로그인 (userId, password 사용)
+  async login(userId: string, password: string): Promise<User> {
     const response = await apiClient<{ user: User; token: string }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ userId, password }),
     });
 
-    // 토큰을 로컬스토리지에 저장
     localStorage.setItem('authToken', response.token);
     return response.user;
   },
 
+  // 회원가입 (학생/관리자/사장님 모두 /auth/signup 사용)
   async signup(data: {
+    userId: string;
     email: string;
     password: string;
     name: string;
     phone?: string;
-    role?: 'customer' | 'restaurant_owner';
+    restaurantName?: string; // 추가
+    capacity?: number;       // 추가
+    address?: string;        // 추가
+    imageUrl?: string;       // 추가
+    role?: 'customer' | 'restaurant_owner'; // 'admin' 제거
   }): Promise<User> {
     const response = await apiClient<{ user: User; token: string }>('/auth/signup', {
       method: 'POST',
@@ -366,25 +377,31 @@ const realAuthService = {
     return response.user;
   },
 
+  // 사장님 회원가입도 /auth/signup 사용 (role: 'restaurant_owner')
   async signupRestaurantOwner(data: {
+    userId: string;
     email: string;
     password: string;
     name: string;
     phone: string;
     restaurantName: string;
+    capacity?: number;
+    address?: string;
+    imageUrl?: string;
   }): Promise<User> {
-    const response = await apiClient<{ user: User; token: string }>(
-      '/auth/signup/restaurant-owner',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }
-    );
+    const response = await apiClient<{ user: User; token: string }>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        role: 'restaurant_owner',
+      }),
+    });
 
     localStorage.setItem('authToken', response.token);
     return response.user;
   },
 
+  // 로그아웃
   async logout(): Promise<void> {
     await apiClient<void>('/auth/logout', {
       method: 'POST',
@@ -392,27 +409,26 @@ const realAuthService = {
     localStorage.removeItem('authToken');
   },
 
+  // 프로필 업데이트 (학생/사장님에 따라 분기 필요)
   async updateProfile(updates: Partial<User>): Promise<User> {
+    // 학생
+    if (updates.role === 'customer') {
+      return apiClient<User>('/student/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      });
+    }
+    // 사장님
+    if (updates.role === 'restaurant_owner') {
+      return apiClient<User>('/store/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      });
+    }
+    // 기타
     return apiClient<User>('/auth/profile', {
       method: 'PATCH',
       body: JSON.stringify(updates),
-    });
-  },
-
-  async changePassword(
-    currentPassword: string,
-    newPassword: string
-  ): Promise<void> {
-    await apiClient<void>('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
-  },
-
-  async resetPassword(email: string): Promise<void> {
-    await apiClient<void>('/auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
     });
   },
 };

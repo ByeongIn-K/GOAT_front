@@ -98,27 +98,38 @@ const mockRestaurantService = {
 // ============================================
 
 const realRestaurantService = {
-  async getAll(): Promise<Restaurant[]> {
-    return apiClient<Restaurant[]>('/restaurants');
+  // 학생: 예약 가능한 매장 조회 (날짜 파라미터 필요)
+  async getAll(date?: string): Promise<Restaurant[]> {
+    const url = date
+      ? `/student/stores?date=${date}`
+      : '/student/stores';
+    return apiClient<Restaurant[]>(url, {
+      method: 'GET',
+    });
   },
 
+  // 학생: 매장 상세 정보 조회
   async getById(id: number): Promise<Restaurant | null> {
     try {
-      return await apiClient<Restaurant>(`/restaurants/${id}`);
+      return await apiClient<Restaurant>(`/student/stores/${id}`, {
+        method: 'GET',
+      });
     } catch (error) {
       return null;
     }
   },
 
+  // 사장님: 매장 상세 정보 입력
   async create(restaurant: Restaurant): Promise<Restaurant> {
-    return apiClient<Restaurant>('/restaurants', {
+    return apiClient<Restaurant>('/store/profile', {
       method: 'POST',
       body: JSON.stringify(restaurant),
     });
   },
 
+  // 사장님: 매장 정보 수정
   async update(id: number, updates: Partial<Restaurant>): Promise<Restaurant> {
-    return apiClient<Restaurant>(`/restaurants/${id}`, {
+    return apiClient<Restaurant>('/store/profile', {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
